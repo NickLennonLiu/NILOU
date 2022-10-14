@@ -19,6 +19,7 @@ python nilou.py
 
 #### TODO
 
-1. Auto deduplication
-2. Search relating tags based on vague input
+1. Fetch preview async
+2. Auto deduplication
+3. Search relating tags based on vague input
 

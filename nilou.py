@@ -35,9 +35,12 @@ def get_search_result(preview_dir, meta_dir, tags, num, limit=20):
 		page_result = []
 		page = get_pages(tags, i+1)
 		for image in page:
-			page_result.append({
-				key:image[key] for key in use_fields
-			})
+			try:
+				page_result.append({
+					key:image[key] for key in use_fields
+				})
+			except KeyError as e:
+				continue
 		print(f"Fetched page {i+1}")
 		get_preview(preview_dir, meta_dir, page_result)
 
