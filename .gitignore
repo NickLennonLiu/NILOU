@@ -1,0 +1,11 @@
+image/*
+meta/*
+preview/*
+!/image
+!/meta
+!/preview
+top20_tags.txt
+/__pycache__
+test.ipynb
+/.idea
+secret_true.py
