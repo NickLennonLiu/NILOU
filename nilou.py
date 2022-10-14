@@ -88,7 +88,13 @@ def get_original_images(meta_dir, image_dir):
 		with open(os.path.join(image_dir, image_hash + ".jpg"), 'wb') as f:
 			f.write(r.content)
 
-
+def make_dirs():
+	if not os.path.exists("./preview"):
+		os.mkdir("./preview")
+	if not os.path.exists("./meta"):
+		os.mkdir("./meta")
+	if not os.path.exists("./image"):
+		os.mkdir("./image")
 
 if __name__ == "__main__":
 	tags = input("input your tags: ")
@@ -97,6 +103,9 @@ if __name__ == "__main__":
 		num = 100
 	else:
 		num = int(num)
+
+	make_dirs()
+
 	#get_search_result("./preview", "./meta", "nilou_(genshin_impact)", 100)
 	get_search_result("./preview", "./meta", tags, num)
 	input("now delete the pictures you don't want, after that, press any key to continue: ")
