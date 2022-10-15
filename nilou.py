@@ -1,6 +1,6 @@
 from time import sleep
 import os
-from secret import api, proxies
+from secret_true import api, proxies, username
 import requests
 import json
 import heapq
@@ -8,11 +8,37 @@ import heapq
 uri = "https://danbooru.donmai.us"
 
 auth = {
-	"$login": api
+	"api_key": api,
+	"login": username
 }
 
 use_fields = {"source", "tag_string", "fav_count", "tag_count_general", "tag_count_artist", "tag_count_character",
-			  "file_url", "preview_file_url"}
+			  "file_url", "preview_file_url", "parent_id"}
+
+def process_tags(tag_list):
+	tag_string = [tag.replace('_', ' ') for tag in tag_list]
+	tag_string = [tag.replace('(', '\\(') for tag in tag_list]
+	tag_string = [tag.replace(')', '\\)') for tag in tag_list]
+	return ', '.join(tag_string)
+
+def resize_image(image):
+	pass
+
+def get_suggested_tags(keyword):
+	payload = {
+		**auth,
+		"search[name_matches]": f"*{keyword}*",
+		"search[hide_empty]": 1,
+		"limit": 10,
+		"type": "json",
+		"search[order]": "count"
+	}
+	res = requests.get(uri + "/tags.json", proxies=proxies, params=payload)
+	if res.status_code != 200:
+		print(f"Failed to get related tags!")
+		return None
+	ls = json.loads(res.content)
+	return ls
 
 def get_pages(tags, page=1, limit=20):
 	payload = {
@@ -49,8 +75,11 @@ def get_preview(preview_dir, meta_dir, search_result):
 	assert os.path.exists(meta_dir), "meta_dir not exists!"
 	print(f"Downloading {len(search_result)} images")
 	for image in search_result:
+		if image['parent_id'] == "null":
+			continue
+		sleep(1)
 		filename = image["preview_file_url"].split('/')[-1].split('.')[0]
-		r = requests.get(image["preview_file_url"])
+		r = requests.get(image["preview_file_url"], proxies=proxies)
 		with open(os.path.join(preview_dir, filename+".jpg"), 'wb') as f:
 			f.write(r.content)
 		with open(os.path.join(meta_dir, filename+".json"), 'w') as f:
@@ -87,9 +116,11 @@ def get_original_images(meta_dir, image_dir):
 		image_hash = os.path.splitext(filename)[0]
 		with open(os.path.join(meta_dir, filename), 'r') as f:
 			meta = json.load(f)
-		r = requests.get(meta["file_url"])
+		r = requests.get(meta["file_url"], proxies=proxies)
 		with open(os.path.join(image_dir, image_hash + ".jpg"), 'wb') as f:
 			f.write(r.content)
+		with open(os.path.join(image_dir, image_hash + ".txt"), 'w') as f:
+			f.write(process_tags(meta["tag_string"].split(' ')))
 
 def make_dirs():
 	if not os.path.exists("./preview"):
@@ -100,15 +131,29 @@ def make_dirs():
 		os.mkdir("./image")
 
 if __name__ == "__main__":
-	tags = input("input your tags: ")
+	keyword = input("input your keyword: ")
+	tag_list = get_suggested_tags(keyword)
+	
+	if len(tag_list):
+		print("Are you searching for: \nidx\t\tname\t\t\tpost_count\t\tcategory")
+		for idx, tag in enumerate(tag_list):
+			print(f"{idx}\t\t{tag['name']}\t\t\t{tag['post_count']}\t\t{tag['category']}")
+	
+		index = int(input("Choose your tag: "))
+		tags = tag_list[index]['name']
+	else:
+		print("No tag found! try again?")
+		exit(0)
+	
+	
 	num = input("number of pictures you want(100 by default): ")
 	if num == "":
 		num = 100
 	else:
 		num = int(num)
-
+	
 	make_dirs()
-
+	
 	#get_search_result("./preview", "./meta", "nilou_(genshin_impact)", 100)
 	get_search_result("./preview", "./meta", tags, num)
 	input("now delete the pictures you don't want, after that, press any key to continue: ")

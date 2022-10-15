@@ -10,3 +10,5 @@ test.ipynb
 /.idea
 secret_true.py
 secret.py
+**_tags.txt
+**.ipynb
