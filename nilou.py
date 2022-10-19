@@ -1,6 +1,7 @@
 from time import sleep
 import os
 from secret_true import api, proxies, username
+from config import META, PREVIEW, IMAGE, CAPTION
 import requests
 import json
 import heapq
@@ -17,12 +18,12 @@ use_fields = {"source", "tag_string", "fav_count", "tag_count_general", "tag_cou
 
 def process_tags(tag_list):
 	tag_string = [tag.replace('_', ' ') for tag in tag_list]
-	tag_string = [tag.replace('(', '\\(') for tag in tag_list]
-	tag_string = [tag.replace(')', '\\)') for tag in tag_list]
+	tag_string = [tag.replace('(', '\\(') for tag in tag_string]
+	tag_string = [tag.replace(')', '\\)') for tag in tag_string]
 	return ', '.join(tag_string)
 
 def resize_image(image):
-	pass
+	raise NotImplementedError
 
 def get_suggested_tags(keyword):
 	payload = {
@@ -55,7 +56,8 @@ def get_pages(tags, page=1, limit=20):
 	ls = json.loads(res.content)
 	return ls
 
-def get_search_result(preview_dir, meta_dir, tags, num, limit=20):
+def get_search_result(tags, num, limit=20):
+	pages = []
 	for i in range(int(num/limit)):
 		sleep(1)
 		page_result = []
@@ -68,27 +70,28 @@ def get_search_result(preview_dir, meta_dir, tags, num, limit=20):
 			except KeyError as e:
 				continue
 		print(f"Fetched page {i+1}")
-		get_preview(preview_dir, meta_dir, page_result)
+		pages.append(page_result)
+	return pages
 
-def get_preview(preview_dir, meta_dir, search_result):
-	assert os.path.exists(preview_dir), "preview_dir not exists!"
-	assert os.path.exists(meta_dir), "meta_dir not exists!"
+def get_preview(search_result, interval=1):
 	print(f"Downloading {len(search_result)} images")
 	for image in search_result:
 		if image['parent_id'] == "null":
 			continue
-		sleep(1)
+		sleep(interval)
 		filename = image["preview_file_url"].split('/')[-1].split('.')[0]
 		r = requests.get(image["preview_file_url"], proxies=proxies)
-		with open(os.path.join(preview_dir, filename+".jpg"), 'wb') as f:
+		with open(os.path.join(PREVIEW, filename+".jpg"), 'wb') as f:
 			f.write(r.content)
-		with open(os.path.join(meta_dir, filename+".json"), 'w') as f:
+		with open(os.path.join(META, filename+".json"), 'w') as f:
 			json.dump(image, f)
+		with open(os.path.join(CAPTION, filename + ".txt"), 'w') as f:
+			f.write(process_tags(image["tag_string"].split(' ')))
 
-def get_topk_tags(meta_dir, topk, output_file=None):
+def get_topk_tags(topk, output_file=None):
 	all_tags = {}
-	for filename in os.listdir(meta_dir):
-		with open(os.path.join(meta_dir, filename), 'r') as f:
+	for filename in os.listdir(META):
+		with open(os.path.join(META, filename), 'r') as f:
 			tags = json.load(f)["tag_string"].split(' ')
 			for tag in tags:
 				if tag in all_tags:
@@ -96,41 +99,47 @@ def get_topk_tags(meta_dir, topk, output_file=None):
 				else:
 					all_tags[tag] = 1
 	k_tags = heapq.nlargest(topk, all_tags, key=all_tags.__getitem__)
-	print(k_tags)
+	print(f"Top {topk} tags are: {k_tags}")
 	if output_file:
+		print(f"Saving to {output_file}")
 		with open(output_file, "w") as f:
 			f.write(', '.join(k_tags))
 
-def remove_undesired_pics(preview_dir, meta_dir):
+def remove_undesired_pics():
 	hash_list = []
-	for filename in os.listdir(preview_dir):
+	for filename in os.listdir(PREVIEW):
 		image_hash = os.path.splitext(filename)[0]
 		hash_list.append(image_hash)
-	for filename in os.listdir(meta_dir):
+	for filename in os.listdir(META):
 		image_hash = os.path.splitext(filename)[0]
 		if image_hash not in hash_list:
-			os.remove(os.path.join(meta_dir, image_hash+".json"))
-
-def get_original_images(meta_dir, image_dir):
-	for filename in os.listdir(meta_dir):
+			os.remove(os.path.join(META, image_hash+".json"))
+	for filename in os.listdir(CAPTION):
 		image_hash = os.path.splitext(filename)[0]
-		with open(os.path.join(meta_dir, filename), 'r') as f:
+		if image_hash not in hash_list:
+			os.remove(os.path.join(CAPTION, image_hash+".txt"))
+
+def get_original_images():
+	for filename in os.listdir(META):
+		image_hash = os.path.splitext(filename)[0]
+		with open(os.path.join(META, filename), 'r') as f:
 			meta = json.load(f)
 		r = requests.get(meta["file_url"], proxies=proxies)
-		with open(os.path.join(image_dir, image_hash + ".jpg"), 'wb') as f:
+		with open(os.path.join(IMAGE, image_hash + ".jpg"), 'wb') as f:
 			f.write(r.content)
-		with open(os.path.join(image_dir, image_hash + ".txt"), 'w') as f:
-			f.write(process_tags(meta["tag_string"].split(' ')))
+		
 
 def make_dirs():
-	if not os.path.exists("./preview"):
-		os.mkdir("./preview")
-	if not os.path.exists("./meta"):
-		os.mkdir("./meta")
-	if not os.path.exists("./image"):
-		os.mkdir("./image")
+	if not os.path.exists(PREVIEW):
+		os.makedirs(PREVIEW)
+	if not os.path.exists(IMAGE):
+		os.makedirs(IMAGE)
+	if not os.path.exists(CAPTION):
+		os.makedirs(CAPTION)
+	if not os.path.exists(META):
+		os.makedirs(META)
 
-if __name__ == "__main__":
+def search_tag():
 	keyword = input("input your keyword: ")
 	tag_list = get_suggested_tags(keyword)
 	
@@ -144,20 +153,52 @@ if __name__ == "__main__":
 	else:
 		print("No tag found! try again?")
 		exit(0)
-	
-	
+	return tags
+
+def set_number():
 	num = input("number of pictures you want(100 by default): ")
 	if num == "":
 		num = 100
 	else:
 		num = int(num)
-	
+	return num
+
+def clear_remains():
+	for filename in os.listdir(PREVIEW):
+		os.remove(os.path.join(PREVIEW, filename))
+	for filename in os.listdir(CAPTION):
+		os.remove(os.path.join(CAPTION, filename))
+	for filename in os.listdir(IMAGE):
+		os.remove(os.path.join(IMAGE, filename))
+	for filename in os.listdir(META):
+		os.remove(os.path.join(META, filename))
+
+def check_remains():
+	if len(os.listdir(PREVIEW)):
+		remove = input("Do you wish to remove previous results? : [y]/n")
+		if not len(remove):
+			remove = "y"
+		if remove == "y":
+			clear_remains()
+		else:
+			print("I will leave you to deal with them.")
+			exit(0)
+
+if __name__ == "__main__":
 	make_dirs()
+	check_remains()
+
+	tags = search_tag()
+	num = set_number()
 	
-	#get_search_result("./preview", "./meta", "nilou_(genshin_impact)", 100)
-	get_search_result("./preview", "./meta", tags, num)
+	
+	#get_search_result(PREVIEW, "./meta", "nilou_(genshin_impact)", 100)
+	pages = get_search_result(tags, num)
+	for page in pages:
+		get_preview(page)
+
 	input("now delete the pictures you don't want, after that, press any key to continue: ")
-	remove_undesired_pics("./preview", "./meta")
-	get_topk_tags("./meta", 20, "./top20_tags.txt")
-	get_original_images("./meta", "./image")
+	remove_undesired_pics()
+	get_topk_tags(20, "./top20_tags.txt")
+	get_original_images()
 
