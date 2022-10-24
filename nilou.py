@@ -80,7 +80,7 @@ def get_preview(search_result, interval=1):
 			continue
 		sleep(interval)
 		filename = image["preview_file_url"].split('/')[-1].split('.')[0]
-		r = requests.get(image["preview_file_url"], proxies=proxies)
+		r = requests.get(image["preview_file_url"], proxies=proxies, params=auth)
 		with open(os.path.join(PREVIEW, filename+".jpg"), 'wb') as f:
 			f.write(r.content)
 		with open(os.path.join(META, filename+".json"), 'w') as f:
@@ -124,7 +124,7 @@ def get_original_images():
 		image_hash = os.path.splitext(filename)[0]
 		with open(os.path.join(META, filename), 'r') as f:
 			meta = json.load(f)
-		r = requests.get(meta["file_url"], proxies=proxies)
+		r = requests.get(meta["file_url"], proxies=proxies, params=auth)
 		with open(os.path.join(IMAGE, image_hash + ".jpg"), 'wb') as f:
 			f.write(r.content)
 		
@@ -181,7 +181,10 @@ def check_remains():
 		if remove == "y":
 			clear_remains()
 		else:
-			print("I will leave you to deal with them.")
+			print("Start downloading the original images")
+			remove_undesired_pics()
+			get_topk_tags(20, "./top20_tags.txt")
+			get_original_images()
 			exit(0)
 
 if __name__ == "__main__":
